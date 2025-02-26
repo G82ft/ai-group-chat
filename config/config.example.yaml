@@ -1,0 +1,5 @@
+tg_token: XXXXX
+genai_token: XXXXX
+sys_inst: config/sys_inst.example.txt
+data: data/data.yaml
+chats_history: data/chats_history.json
