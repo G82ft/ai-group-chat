@@ -1,9 +1,9 @@
 import io
+from base64 import b64encode
 from re import sub, search
 
-from PIL import Image
 from aiogram import F, Router
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReactionTypeEmoji
 # noinspection PyPackageRequirements
 from google import genai
 # noinspection PyPackageRequirements
@@ -25,9 +25,10 @@ async def handle_text(msg: Message):
     if msg.chat.id not in data_["chats"]:
         return
 
-    bot_msg = await msg.reply('Received, processing...')
+    await msg.react([ReactionTypeEmoji(emoji='👀')])
 
-    await bot_msg.edit_text(await generate_response(msg))
+    await msg.reply(await generate_response(msg))
+    await msg.react([ReactionTypeEmoji(emoji='👀')])
 
 
 @gen.message((F.reply_to_message & F.reply_to_message.from_user.id == 7584972194) & F.photo)
@@ -77,11 +78,12 @@ async def generate_response(msg: Message, photo: bool = False):
         return 'Your message is empty.'
 
     contents = [request]
+    image_file = io.BytesIO()
     if photo and msg.photo:
-        image_file = io.BytesIO()
         await msg.bot.download_file((await msg.bot.get_file(msg.photo[0].file_id)).file_path, image_file)
         contents.append(Part.from_bytes(data=image_file.getvalue(), mime_type='image/jpeg'))
 
+    await msg.bot.send_chat_action(msg.chat.id, 'typing')
     result = chats[msg.chat.id].send_message(contents)
 
     if result.text is None:
@@ -90,13 +92,21 @@ async def generate_response(msg: Message, photo: bool = False):
             response += f'Block reason: {result.prompt_feedback.block_reason.value}'
         return response
 
-    data.write_chat_history(msg.chat.id, (request, result.text))
+    data.write_chat_history(
+        msg.chat.id,
+        [
+            [request]
+            + (
+                [b64encode(image_file.getvalue()).decode('ascii')]
+                if image_file.getvalue()
+                else []
+            ), [result.text]])
 
     return result.text or "<empty>"
 
 
 def create_chat(chat_id: int):
-    with open(config.get("sys_inst")) as f:
+    with open(config.get("sys_inst"), encoding='utf-8') as f:
         sys_inst: str = f.read()
 
     return client.chats.create(
