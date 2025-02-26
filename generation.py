@@ -1,4 +1,6 @@
 import io
+import os.path
+import shutil
 from base64 import b64encode
 from re import sub, search
 
@@ -13,6 +15,7 @@ from google.genai.types import GenerateContentConfig, Part
 from config import config
 from data import data
 from shared import chats
+from utils import format_input
 
 client = genai.Client(api_key=config.get("genai_token"))
 
@@ -65,15 +68,9 @@ async def generate_response(msg: Message, photo: bool = False):
         chats[msg.chat.id] = create_chat(msg.chat.id)
 
     text = msg.text or msg.caption or '<empty>'
-    admin = search(r'<a>[\s\S]+</a>', text)
 
-    if admin is None or msg.from_user.id not in data.fetch()["admins"]:
-        admin = ''
-    else:
-        admin = admin.group(0)
-    user = sub(r'<a>[\s\S]+</a>', '', text)
+    request = format_input(text, msg.from_user.first_name, msg.from_user.id in data.fetch()["admins"])
 
-    request = f'{admin}\n' + (f'<u name="{msg.from_user.first_name}">\n{user}\n</u>' if user else '')
     if not request:
         return 'Your message is empty.'
 
@@ -106,7 +103,12 @@ async def generate_response(msg: Message, photo: bool = False):
 
 
 def create_chat(chat_id: int):
-    with open(config.get("sys_inst"), encoding='utf-8') as f:
+    chat_sys_inst: str = f'{config.get("chats_sys_inst")}{chat_id}.txt'
+    print(chat_sys_inst)
+    if not os.path.exists(chat_sys_inst):
+        shutil.copy(config.get("base_sys_inst"), chat_sys_inst)
+
+    with open(chat_sys_inst, encoding='utf-8') as f:
         sys_inst: str = f.read()
 
     return client.chats.create(
