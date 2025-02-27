@@ -53,7 +53,7 @@ async def admin(cq: CallbackQuery):
     match action:
         case 'add':
             data_[f'{key}s'].append(value)
-        case 'delet':
+        case 'remov':
             if len(data_[f'{key}s']) == 1:
                 await cq.answer(f'You cannot remove the last {key}.', show_alert=True)
                 return
@@ -197,12 +197,12 @@ def get_actions(msg: Message, data_: dict):
             [
                 InlineKeyboardButton(text='Add admin', callback_data=f'data:admin:add:{msg.from_user.id}')
                 if msg.from_user.id not in data_["admins"] else
-                InlineKeyboardButton(text='Remove admin', callback_data=f'data:admin:delet:{msg.from_user.id}')
+                InlineKeyboardButton(text='Remove admin', callback_data=f'data:admin:remov:{msg.from_user.id}')
             ],
             [
                 InlineKeyboardButton(text='Allow chat', callback_data=f'data:chat:add:{msg.chat.id}')
                 if msg.chat.id not in data_["chats"] else
-                InlineKeyboardButton(text='Block chat', callback_data=f'data:chat:delet:{msg.chat.id}')
+                InlineKeyboardButton(text='Block chat', callback_data=f'data:chat:remov:{msg.chat.id}')
             ],
         ]
     )

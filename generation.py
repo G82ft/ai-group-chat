@@ -8,6 +8,7 @@ from aiogram import F, Router
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReactionTypeEmoji
 # noinspection PyPackageRequirements
 from google import genai
+from google.genai.errors import ClientError, APIError
 # noinspection PyPackageRequirements
 # noinspection PyPackageRequirements
 from google.genai.types import GenerateContentConfig, Part
@@ -31,7 +32,6 @@ async def handle_text(msg: Message):
     await msg.react([ReactionTypeEmoji(emoji='👀')])
 
     await msg.reply(await generate_response(msg))
-    await msg.react([ReactionTypeEmoji(emoji='👀')])
 
 
 @gen.message((F.reply_to_message & F.reply_to_message.from_user.id == 7584972194) & F.photo)
@@ -65,6 +65,7 @@ async def handle_photo(cq: CallbackQuery):
 
 async def generate_response(msg: Message, photo: bool = False):
     if msg.chat.id not in chats:
+        print('creating chat')
         chats[msg.chat.id] = create_chat(msg.chat.id)
 
     text = msg.text or msg.caption or '<empty>'
@@ -74,14 +75,31 @@ async def generate_response(msg: Message, photo: bool = False):
     if not request:
         return 'Your message is empty.'
 
-    contents = [request]
+    contents = [Part(text=request)]
     image_file = io.BytesIO()
     if photo and msg.photo:
         await msg.bot.download_file((await msg.bot.get_file(msg.photo[0].file_id)).file_path, image_file)
         contents.append(Part.from_bytes(data=image_file.getvalue(), mime_type='image/jpeg'))
 
     await msg.bot.send_chat_action(msg.chat.id, 'typing')
-    result = chats[msg.chat.id].send_message(contents)
+    try:
+        print('Sending message')
+        result = chats[msg.chat.id].send_message(contents)
+    except APIError as ce:
+        response: str = f'Unexpected error: {ce.code} {ce.status}.\n'
+        match ce.code:
+            case 429:
+                response += 'Too many requests. Please try again later.'
+            case 500:
+                response += 'Input context is too long. Bot is disabled.\nContact admin to clear chat history.'
+                data_ = data.fetch()
+                data_['chats'].remove(msg.chat.id)
+                data.write(data_)
+            case 503:
+                response += 'Service is temporarily running out of capacity. Please try again later.'
+
+        print(ce.details)
+        return response
 
     if result.text is None:
         response = 'Rephrase your message and try again.\n'
@@ -104,7 +122,6 @@ async def generate_response(msg: Message, photo: bool = False):
 
 def create_chat(chat_id: int):
     chat_sys_inst: str = f'{config.get("chats_sys_inst")}{chat_id}.txt'
-    print(chat_sys_inst)
     if not os.path.exists(chat_sys_inst):
         shutil.copy(config.get("base_sys_inst"), chat_sys_inst)
 

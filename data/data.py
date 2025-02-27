@@ -56,4 +56,4 @@ def write_chat_history(chat_id: int, data: list[list[str]]):
 
     with open(config.get("chats_history"), 'w', encoding='utf-8') as f:
         # noinspection PyTypeChecker
-        json.dump(chats, f, ensure_ascii=False, indent=2)
+        json.dump(chats, f, ensure_ascii=False)
