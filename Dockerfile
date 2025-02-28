@@ -5,4 +5,4 @@ ADD . .
 VOLUME ["/app/data", "/app/config"]
 RUN pip install -r requirements.txt
 
-ENTRYPOINT ["python3", "main.py"]
+ENTRYPOINT ["/bin/ash"]
