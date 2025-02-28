@@ -15,6 +15,7 @@ from google.genai.types import GenerateContentConfig, Part
 
 from config import config
 from data import data
+from data.data import stop_bot_in_chat
 from shared import chats
 from utils import format_input
 
@@ -65,7 +66,6 @@ async def handle_photo(cq: CallbackQuery):
 
 async def generate_response(msg: Message, photo: bool = False):
     if msg.chat.id not in chats:
-        print('creating chat')
         chats[msg.chat.id] = create_chat(msg.chat.id)
 
     text = msg.text or msg.caption or '<empty>'
@@ -83,18 +83,19 @@ async def generate_response(msg: Message, photo: bool = False):
 
     await msg.bot.send_chat_action(msg.chat.id, 'typing')
     try:
-        print('Sending message')
         result = chats[msg.chat.id].send_message(contents)
     except APIError as ce:
         response: str = f'Unexpected error: {ce.code} {ce.status}.\n'
         match ce.code:
             case 429:
-                response += 'Too many requests. Please try again later.'
+                response += ('Too many requests. Bot is disabled.\n'
+                             'Contact admin to check limits.\n'
+                             'https://console.cloud.google.com/apis/dashboard')
+                stop_bot_in_chat(msg.chat.id)
             case 500:
-                response += 'Input context is too long. Bot is disabled.\nContact admin to clear chat history.'
-                data_ = data.fetch()
-                data_['chats'].remove(msg.chat.id)
-                data.write(data_)
+                response += ('Input context is too long. Bot is disabled.\n'
+                             'Contact admin to clear chat history.')
+                stop_bot_in_chat(msg.chat.id)
             case 503:
                 response += 'Service is temporarily running out of capacity. Please try again later.'
 

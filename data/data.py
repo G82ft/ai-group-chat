@@ -57,3 +57,9 @@ def write_chat_history(chat_id: int, data: list[list[str]]):
     with open(config.get("chats_history"), 'w', encoding='utf-8') as f:
         # noinspection PyTypeChecker
         json.dump(chats, f, ensure_ascii=False)
+
+
+def stop_bot_in_chat(chat_id: int):
+    data_ = fetch()
+    data_['chats'].remove(chat_id)
+    write(data_)
