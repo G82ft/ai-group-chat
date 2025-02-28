@@ -6,4 +6,4 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-ENTRYPOINT ["python3", "main.py"]
+ENTRYPOINT ["/bin/ash"]
