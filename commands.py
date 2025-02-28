@@ -8,8 +8,8 @@ from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile
 
-from config import config
-from data import data
+import config
+import data
 from shared import chats, config as conf
 from utils import format_input
 

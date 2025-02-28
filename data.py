@@ -5,7 +5,7 @@ import json
 
 from google.genai.types import Content, Part
 
-from config import config
+import config
 
 
 def fetch():

@@ -3,7 +3,7 @@ import asyncio
 from aiogram import Dispatcher, Bot
 
 from commands import cmd
-from config import config
+import config
 from generation import gen
 
 dp = Dispatcher()

@@ -2,20 +2,19 @@ import io
 import os.path
 import shutil
 from base64 import b64encode
-from re import sub, search
 
 from aiogram import F, Router
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReactionTypeEmoji
 # noinspection PyPackageRequirements
 from google import genai
-from google.genai.errors import ClientError, APIError
+from google.genai.errors import APIError
 # noinspection PyPackageRequirements
 # noinspection PyPackageRequirements
 from google.genai.types import GenerateContentConfig, Part
 
-from config import config
-from data import data
-from data.data import stop_bot_in_chat
+import config
+import data
+from data import stop_bot_in_chat
 from shared import chats
 from utils import format_input
 
