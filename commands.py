@@ -1,71 +1,89 @@
-import os.path
-from asyncio import Lock
 import io
+from asyncio import Lock
 from base64 import b64encode
 
 from aiogram import Router
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile
+from aiogram.types import Message, FSInputFile
+from aiogram.utils.chat_member import ADMINS
 
 import config
-import data
-from shared import chats, config as conf
+from const import SETTINGS_INFO, TRUE_LITERALS, CHAT_SYS_INST
+from data import history, settings
+from shared import chats, config as conf, locks
 from utils import format_input
 
 cmd = Router(name='cmd')
 
+#                 from_chat, to_chat | user_turn | messages
 added_chat_context: dict[int, list[str | bool | list[list[list[str]]]]] = {}
 add_ctxt_lock = Lock()
 
 
-# -------------------------- chat_id | is_user_turn | messages
-
-
 @cmd.message(CommandStart())
 async def start(msg: Message):
-    data_ = data.fetch()
+    settings_ = await settings.get(msg.chat.id)
 
     msg = msg.reply_to_message or msg
 
-    is_admin: bool = msg.from_user.id in data_["admins"]
-
     await msg.bot.send_message(
         msg.chat.id,
-        f'Chat ID: {msg.chat.id}\n'
-        f'Is enabled: {msg.chat.id in data_["chats"]}\n'
         f'User ID: {msg.from_user.id}\n'
-        f'Is admin: {is_admin}',
-        reply_markup=get_actions(msg, data_)
+        f'Is admin: {is_admin(msg)}\n'
+        f'Chat ID: {msg.chat.id}\n'
+        f'Chat enabled: {settings_["enabled"]}\n'
+        f'Image recognition: {settings_["image_recognition"]}\n'
+        f'Override system instructions: {settings_["override_sys"]}\n'
     )
 
 
-@cmd.callback_query(lambda c: c.data.startswith('data:'))
-async def admin(cq: CallbackQuery):
-    data_ = data.fetch()
+@cmd.message(Command('set_setting'))
+async def set_setting(msg: Message):
+    if not await is_admin(msg):
+        await msg.reply(f'You are not an admin.', show_alert=True)
 
-    if cq.from_user.id not in data_["admins"]:
-        await cq.answer(f'You are not an admin.', show_alert=True)
+    chat_id, key, value = msg.text.removeprefix('/set_setting').split()
 
-    key, action, value = cq.data.removeprefix('data:').split(':')
-    value = int(value)
+    match key:
+        case "enabled" | "override_sys":
+            success = await settings.set_setting(int(chat_id), key, value.lower() in TRUE_LITERALS)
+        case "api_key" | "image_recognition":
+            success = await settings.set_setting(int(chat_id), key, value)
+        case _:
+            success = False
 
-    match action:
-        case 'add':
-            data_[f'{key}s'].append(value)
-        case 'remov':
-            if len(data_[f'{key}s']) == 1:
-                await cq.answer(f'You cannot remove the last {key}.', show_alert=True)
-                return
-            data_[f'{key}s'].remove(value)
+    await msg.reply(
+        success and f"Setting '{key}' updated successfully." or f"Invalid value provided for '{key}'.",
+    )
+    await msg.delete()
 
-    data.write(data_)
-    await cq.message.edit_text(f'{key.capitalize()} {action}ed successfully.')
+
+@cmd.message(Command('get_settings_info'))
+async def get_settings_info(msg: Message):
+    result: str = ''
+    values_key = (await is_admin(msg)) and 'admin_values' or 'values'
+
+    for setting, info in SETTINGS_INFO.items():
+        result += (
+            f"\n'{setting}':\n"
+            f"Type: '{info["type"]}'\n"
+        )
+        if info["type"] == bool:
+            result += (
+                f'Available values: '
+                f'{', '.join(TRUE_LITERALS)}. Other values are considered false.\n'
+            )
+            continue
+        elif values_key not in info:
+            continue
+
+        result += f"Available values: '{"', '".join(info[values_key])}'.\n'"
 
 
 @cmd.message(Command('add_chat_context'))
 async def add_chat_context(msg: Message):
-    if msg.from_user.id not in data.fetch()["admins"]:
+    if not await is_admin(msg):
         return
 
     if msg.from_user.id != msg.chat.id:
@@ -93,7 +111,7 @@ async def add_chat_context(msg: Message):
 
 
 @cmd.message(lambda m: m.from_user.id == m.chat.id and m.chat.id in added_chat_context)
-async def add_chat_context(msg: Message):
+async def handle_add_chat_context(msg: Message):
     await add_ctxt_lock.acquire()
     user: str = msg.from_user.first_name
     if msg.forward_origin is not None:
@@ -123,7 +141,7 @@ async def add_chat_context(msg: Message):
 
 @cmd.message(Command('reload_chat'))
 async def reload_chat(msg: Message):
-    if msg.from_user.id not in data.fetch()["admins"]:
+    if not await is_admin(msg):
         return
 
     del chats[msg.chat.id]
@@ -134,7 +152,7 @@ async def reload_chat(msg: Message):
 
 @cmd.message(Command('reload_config'))
 async def reload_config(msg: Message):
-    if msg.from_user.id not in data.fetch()["admins"]:
+    if not await is_admin(msg):
         return
 
     conf.clear()
@@ -145,34 +163,23 @@ async def reload_config(msg: Message):
 
 @cmd.message(Command('get_sys_inst'))
 async def get_sys_inst(msg: Message):
-    if msg.from_user.id not in data.fetch()["admins"]:
-        return
-
-    if msg.from_user.id != msg.chat.id:
-        await msg.reply('You must use this command in DM with the bot.')
-        return
-
-    if len(msg.text.split()) < 2:
-        await msg.reply('You need to specify chat ID as an argument.')
+    if (text := await validate_cmd(msg)) is not None:
+        if text:
+            # noinspection PyTypeChecker
+            await msg.reply(text)
         return
 
     chat = msg.text.split()[1]
 
-    print(os.path.exists(f'{config.get("chats_sys_inst")}{chat}.txt'), f'{config.get("chats_sys_inst")}{chat}.txt')
-    await msg.reply_document(FSInputFile(f'{config.get("chats_sys_inst")}{chat}.txt'))
+    await msg.reply_document(FSInputFile(CHAT_SYS_INST.format(chat)))
 
 
-@cmd.message(Command('post_sys_inst'))
-async def post_sys_inst(msg: Message):
-    if msg.from_user.id not in data.fetch()["admins"]:
-        return
-
-    if msg.from_user.id != msg.chat.id:
-        await msg.reply('You must use this command in DM with the bot.')
-        return
-
-    if len(msg.caption.split()) < 2:
-        await msg.reply('You need to specify chat ID as an argument.')
+@cmd.message(Command('set_sys_inst'))
+async def set_sys_inst(msg: Message):
+    if (text := await validate_cmd(msg)) is not None:
+        if text:
+            # noinspection PyTypeChecker
+            await msg.reply(text)
         return
 
     chat = msg.caption.split()[1]
@@ -180,41 +187,53 @@ async def post_sys_inst(msg: Message):
     if not msg.document:
         await msg.reply('You need to provide a file with system instructions.')
 
-    chat_sys_inst_path: str = f'{config.get("chats_sys_inst")}{chat}.txt'
+    chat_sys_inst_path: str = CHAT_SYS_INST.format(chat)
 
-    await msg.reply_document(
-        FSInputFile(chat_sys_inst_path, f'{chat_sys_inst_path}.bak'))
+    async with locks.get_lock(msg.chat.id):
+        await msg.reply_document(
+            FSInputFile(chat_sys_inst_path, f'{chat_sys_inst_path}.bak'),
+            caption='System instructions backup. Writing new instructions...',
+        )
 
-    with open(chat_sys_inst_path, 'wb') as f:
-        await msg.bot.download_file((await msg.bot.get_file(msg.document.file_id)).file_path, f)
+    async with locks.get_lock(msg.chat.id):
+        with open(chat_sys_inst_path, 'wb') as f:
+            await msg.bot.download_file((await msg.bot.get_file(msg.document.file_id)).file_path, f)
 
     await msg.reply(f'System instructions changed for {chat}.')
 
 
-def get_actions(msg: Message, data_: dict):
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text='Add admin', callback_data=f'data:admin:add:{msg.from_user.id}')
-                if msg.from_user.id not in data_["admins"] else
-                InlineKeyboardButton(text='Remove admin', callback_data=f'data:admin:remov:{msg.from_user.id}')
-            ],
-            [
-                InlineKeyboardButton(text='Allow chat', callback_data=f'data:chat:add:{msg.chat.id}')
-                if msg.chat.id not in data_["chats"] else
-                InlineKeyboardButton(text='Block chat', callback_data=f'data:chat:remov:{msg.chat.id}')
-            ],
-        ]
-    )
-
-
 async def stop_context(msg: Message):
-    bot_msg: Message = await msg.reply('Finished receiving messages. Adding context...')
     context = added_chat_context[msg.chat.id][-1]
+    bot_msg: Message = await msg.reply('Finished receiving messages. Adding context...')
+
     if not added_chat_context[msg.chat.id][1]:
         context = context[:-1]
-        await msg.bot.send_message(msg.chat.id, 'Last message is removed, because it is from user')
+        bot_msg = await bot_msg.edit_text(f'{bot_msg.text}\nLast message is removed, because it was sent from a user.')
+
     for interaction in context:
-        data.write_chat_history(added_chat_context[msg.chat.id][0], interaction)
-    await bot_msg.edit_text(f'Context added to chat {added_chat_context[msg.chat.id][0]}.')
+        await history.write_chat_history(added_chat_context[msg.chat.id][0], interaction)
+
+    await bot_msg.edit_text(f'{bot_msg.text}\nContext added to chat {added_chat_context[msg.chat.id][0]}.')
+
     del added_chat_context[msg.chat.id]
+
+
+async def validate_cmd(msg: Message) -> str | None:
+    text = msg.text or msg.caption
+    if not await is_admin(msg):
+        return ''
+
+    if msg.from_user.id != msg.chat.id:
+        return 'You must use this command in DM with the bot.'
+
+    if len(text.split()) < 2:
+        return 'You need to specify chat ID as an argument.'
+
+
+async def is_admin(msg: Message) -> bool:
+    if msg.from_user.id in config.get("admins"):
+        return True
+
+    return (
+            isinstance(await msg.bot.get_chat_member(msg.chat.id, msg.from_user.id), ADMINS)
+            and (await settings.get(msg.chat.id))["api_key"])

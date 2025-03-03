@@ -1,32 +1,27 @@
 import io
-import os.path
-import shutil
 from base64 import b64encode
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReactionTypeEmoji
 # noinspection PyPackageRequirements
-from google import genai
 from google.genai.errors import APIError
 # noinspection PyPackageRequirements
-# noinspection PyPackageRequirements
-from google.genai.types import GenerateContentConfig, Part
+from google.genai.types import Part
 
-import config
-import data
-from data import stop_bot_in_chat
+from commands import is_admin
+from data import create_chat, history, settings
 from shared import chats
 from utils import format_input
 
-client = genai.Client(api_key=config.get("genai_token"))
-
 gen = Router(name='gen')
 
+reaction_filter = (F.reply_to_message & F.reply_to_message.from_user.id == 7584972194) | (F.chat.id == F.from_user.id)
 
-@gen.message((F.reply_to_message & F.reply_to_message.from_user.id == 7584972194) & (~F.photo))
+
+@gen.message(reaction_filter & (~F.photo))
 async def handle_text(msg: Message):
-    data_ = data.fetch()
-    if msg.chat.id not in data_["chats"]:
+    if not (await settings.get(msg.chat.id))["enabled"]:
         return
 
     await msg.react([ReactionTypeEmoji(emoji='👀')])
@@ -34,14 +29,33 @@ async def handle_text(msg: Message):
     await msg.reply(await generate_response(msg))
 
 
-@gen.message((F.reply_to_message & F.reply_to_message.from_user.id == 7584972194) & F.photo)
+@gen.message(reaction_filter & F.photo)
+async def handle_photo(msg: Message):
+    match (await settings.get(msg.chat.id))["image_recognition"]:
+        case 'ignore':
+            return
+        case 'no':
+            await msg.reply(
+                'Image recognition is disabled.\n'
+                'You can disable this message by using `/set_setting image_recognition ignore`.',
+                parse_mode=ParseMode.MARKDOWN
+            )
+        case 'ask':
+            await confirm_photo(msg)
+        case 'yes':
+            await msg.react([ReactionTypeEmoji(emoji='👀')])
+            await msg.reply(await generate_response(msg, True))
+        case _:
+            return
+
+
 async def confirm_photo(msg: Message):
     await msg.reply(
         'Photo detected. Do you want AI to analyze it?',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text='Yes', callback_data=f'photo:yes')],
-                [InlineKeyboardButton(text='Analyze text only', callback_data=f'photo:text')],
+                [InlineKeyboardButton(text='Analyze caption only', callback_data=f'photo:caption')],
                 [InlineKeyboardButton(text='Cancel', callback_data=f'photo:cancel')]
             ]
         )
@@ -56,8 +70,8 @@ async def handle_photo(cq: CallbackQuery):
         case 'yes':
             await cq.message.edit_text('Processing with photo...')
             await cq.message.edit_text(await generate_response(cq.message.reply_to_message, True))
-        case 'text':
-            await cq.message.edit_text('Processing text only...')
+        case 'caption':
+            await cq.message.edit_text('Processing caption only...')
             await cq.message.edit_text(await generate_response(cq.message.reply_to_message))
         case 'cancel':
             await cq.message.edit_text('Processing request cancelled.')
@@ -65,11 +79,11 @@ async def handle_photo(cq: CallbackQuery):
 
 async def generate_response(msg: Message, photo: bool = False):
     if msg.chat.id not in chats:
-        chats[msg.chat.id] = create_chat(msg.chat.id)
+        chats[msg.chat.id] = await create_chat(msg.chat.id)
 
     text = msg.text or msg.caption or '<empty>'
 
-    request = format_input(text, msg.from_user.first_name, msg.from_user.id in data.fetch()["admins"])
+    request = format_input(text, msg.from_user.first_name, await is_admin(msg))
 
     if not request:
         return 'Your message is empty.'
@@ -90,15 +104,14 @@ async def generate_response(msg: Message, photo: bool = False):
                 response += ('Too many requests. Bot is disabled.\n'
                              'Contact admin to check limits.\n'
                              'https://console.cloud.google.com/apis/dashboard')
-                stop_bot_in_chat(msg.chat.id)
+                await settings.set_setting(msg.chat.id, "enabled", False)
             case 500:
                 response += ('Input context is too long. Bot is disabled.\n'
                              'Contact admin to clear chat history.')
-                stop_bot_in_chat(msg.chat.id)
+                await settings.set_setting(msg.chat.id, "enabled", False)
             case 503:
                 response += 'Service is temporarily running out of capacity. Please try again later.'
 
-        print(ce.details)
         return response
 
     if result.text is None:
@@ -107,7 +120,7 @@ async def generate_response(msg: Message, photo: bool = False):
             response += f'Block reason: {result.prompt_feedback.block_reason.value}'
         return response
 
-    data.write_chat_history(
+    await history.write_chat_history(
         msg.chat.id,
         [
             [request]
@@ -118,22 +131,3 @@ async def generate_response(msg: Message, photo: bool = False):
             ), [result.text]])
 
     return result.text or "<empty>"
-
-
-def create_chat(chat_id: int):
-    chat_sys_inst: str = f'{config.get("chats_sys_inst")}{chat_id}.txt'
-    if not os.path.exists(chat_sys_inst):
-        shutil.copy(config.get("base_sys_inst"), chat_sys_inst)
-
-    with open(chat_sys_inst, encoding='utf-8') as f:
-        sys_inst: str = f.read()
-
-    return client.chats.create(
-        model="gemini-2.0-flash",
-        config=GenerateContentConfig(
-            temperature=1.5,
-            system_instruction=sys_inst,
-            safety_settings=config.safety_settings,
-        ),
-        history=data.get_chat_history(chat_id)
-    )

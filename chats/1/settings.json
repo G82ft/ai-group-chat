@@ -1,0 +1,13 @@
+{
+  "api_key": null,
+  "image_recognition": "no | yes | ask | ignore",
+  "safety": {
+    "HARM_CATEGORY_HATE_SPEECH": "BLOCK_LOW_AND_ABOVE",
+    "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_MEDIUM_AND_ABOVE",
+    "HARM_CATEGORY_HARASSMENT": "BLOCK_ONLY_HIGH",
+    "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
+    "HARM_CATEGORY_CIVIC_INTEGRITY": "OFF"
+  },
+  "override_sys": false,
+  "enabled": false
+}

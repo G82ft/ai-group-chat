@@ -1,6 +1,7 @@
 tg_token: XXXXX
-genai_token: XXXXX
-base_sys_inst: config/sys_inst.example.txt
-data: data/data.yaml
-chats_history: data/chats_history.json
-chats_sys_inst: data/sys_inst/
+base_genai_token: XXXXX
+genai_model: gemini-2.0-flash
+base_sys_inst: config/sys_inst.txt
+admins:
+  - 1
+  - 2
