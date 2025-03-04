@@ -9,7 +9,7 @@ from aiogram.types import Message, FSInputFile
 from aiogram.utils.chat_member import ADMINS
 
 import config
-from const import SETTINGS_INFO, TRUE_LITERALS, CHAT_SYS_INST, CHAT_HISTORY
+from const import SETTINGS_INFO, TRUE_LITERALS, CHAT_SYS_INST, CHAT_HISTORY, DEFAULT_SETTINGS
 from data import history, settings
 from shared import chats, config as conf, file_locks
 from utils import format_input
@@ -74,13 +74,18 @@ async def get_settings_info(msg: Message):
         if info["type"] == bool:
             result += (
                 f'Available values: '
-                f'{', '.join(TRUE_LITERALS)}. Other values are considered false.\n'
+                f'{', '.join(TRUE_LITERALS)}. Other values are considered false\n'
             )
             continue
+        elif info["type"] == dict:
+            result += (
+                f'Available keys: '
+                f'{', '.join(DEFAULT_SETTINGS[setting].keys())}\n'
+            )
         elif values_key not in info:
             continue
 
-        result += f"Available values: {", ".join(info[values_key])}.\n"
+        result += f"Available values: {", ".join(info[values_key])}\n"
 
     await msg.reply(result)
 

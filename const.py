@@ -27,7 +27,9 @@ SETTINGS_INFO: dict = {
         "admin_values": ['yes', 'ask', 'no', 'ignore']
     },
     "safety": {
-        "type": dict
+        "type": dict,
+        "values": ['BLOCK_MEDIUM_AND_ABOVE', 'BLOCK_LOW_AND_ABOVE'],
+        "admin_values": ['BLOCK_MEDIUM_AND_ABOVE', 'BLOCK_LOW_AND_ABOVE', 'BLOCK_ONLY_HIGH', 'BLOCK_NONE', 'OFF']
     },
     "override_sys": {
         "type": bool
@@ -45,13 +47,13 @@ SETTINGS_VALIDATION: dict = {
         "validate": lambda d: all(
             k in ["HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_DANGEROUS_CONTENT", "HARM_CATEGORY_HARASSMENT",
                   "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_CIVIC_INTEGRITY"]
-            and v in ['BLOCK_MEDIUM_AND_ABOVE', 'BLOCK_LOW_AND_ABOVE']
+            and v in SETTINGS_INFO["safety"]["values"]
             for k, v in d.items()
         ),
         "admin_validate": lambda d: all(
             k in ["HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_DANGEROUS_CONTENT", "HARM_CATEGORY_HARASSMENT",
                   "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_CIVIC_INTEGRITY"]
-            and v in ['BLOCK_MEDIUM_AND_ABOVE', 'BLOCK_LOW_AND_ABOVE', 'BLOCK_ONLY_HIGH', 'BLOCK_NONE', 'OFF']
+            and v in SETTINGS_INFO["safety"]["admin_values"]
             for k, v in d.items()
         )
     },
