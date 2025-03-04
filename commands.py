@@ -108,7 +108,7 @@ async def add_chat_context(msg: Message):
                 parse_mode=ParseMode.HTML
             )
         else:
-            await msg.reply(caption)
+            await msg.reply(caption, parse_mode=ParseMode.HTML)
 
     added_chat_context[msg.chat.id] = [
         chat_id, True, []
