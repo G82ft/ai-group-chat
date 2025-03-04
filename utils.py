@@ -12,9 +12,9 @@ def format_input(text: str, user_name: str, is_admin: bool):
     user = sub(r'<a>[\s\S]+</a>', '', text)
 
     return (
-            f'<message user_role="admin" name="Admin">\n{admin}\n</message>\n'
-            + (f'<message user_role="interlocutor" name="{user_name}">\n{user}\n</message>' if user else '')
-    )
+        (f'<message user_role="admin" name="Admin">\n{admin}\n</message>\n' if admin else '')
+        + (f'<message user_role="interlocutor" name="{user_name}">\n{user}\n</message>' if user else '')
+    ) or '<empty>'
 
 
 class ChatLockManager:
