@@ -93,6 +93,7 @@ async def add_chat_context(msg: Message):
     _, chat_id, _ = parse_args(msg, chat_arg=True)
 
     async with file_locks.get_lock(chat_id):
+        print(repr(CHAT_HISTORY.format(chat_id)))
         await msg.reply_document(
             FSInputFile(CHAT_HISTORY.format(chat_id), f'history.jsonl.bak'),
             caption='Forward/send messages. Odd messages are from users, even are from model.\n\n'
