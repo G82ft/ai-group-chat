@@ -115,6 +115,26 @@ async def add_chat_context(msg: Message):
     ]
 
 
+@cmd.message(Command('stop_add_context'))
+async def stop_add_context(msg: Message):
+    if msg.chat.id not in added_chat_context:
+        return await msg.reply('You have not started adding context yet.')
+
+    context = added_chat_context[msg.chat.id][-1]
+    bot_msg: Message = await msg.reply('Finished receiving messages. Adding context...')
+
+    if not added_chat_context[msg.chat.id][1]:
+        context = context[:-1]
+        bot_msg = await bot_msg.edit_text(f'{bot_msg.text}\nLast message is removed, because it was sent from a user.')
+
+    for interaction in context:
+        await history.write_chat_history(added_chat_context[msg.chat.id][0], interaction)
+
+    await bot_msg.edit_text(f'{bot_msg.text}\nContext added to chat {added_chat_context[msg.chat.id][0]}.')
+
+    del added_chat_context[msg.chat.id]
+
+
 @cmd.message(lambda m: m.from_user.id == m.chat.id and m.chat.id in added_chat_context)
 async def handle_add_chat_context(msg: Message):
     await add_ctxt_lock.acquire()
@@ -142,26 +162,6 @@ async def handle_add_chat_context(msg: Message):
         added_chat_context[msg.chat.id][-1][-1].append([msg.text])
     added_chat_context[msg.chat.id][1] = not added_chat_context[msg.chat.id][1]
     add_ctxt_lock.release()
-
-
-@cmd.message(Command('stop_add_context'))
-async def stop_add_context(msg: Message):
-    if msg.chat.id not in added_chat_context:
-        return await msg.reply('You have not started adding context yet.')
-
-    context = added_chat_context[msg.chat.id][-1]
-    bot_msg: Message = await msg.reply('Finished receiving messages. Adding context...')
-
-    if not added_chat_context[msg.chat.id][1]:
-        context = context[:-1]
-        bot_msg = await bot_msg.edit_text(f'{bot_msg.text}\nLast message is removed, because it was sent from a user.')
-
-    for interaction in context:
-        await history.write_chat_history(added_chat_context[msg.chat.id][0], interaction)
-
-    await bot_msg.edit_text(f'{bot_msg.text}\nContext added to chat {added_chat_context[msg.chat.id][0]}.')
-
-    del added_chat_context[msg.chat.id]
 
 
 @cmd.message(Command('reload_chat'))
