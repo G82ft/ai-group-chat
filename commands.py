@@ -94,7 +94,7 @@ async def add_chat_context(msg: Message):
 
     async with file_locks.get_lock(chat_id):
         await msg.reply_document(
-            FSInputFile(CHAT_HISTORY.format(msg.chat.id), f'history.jsonl.bak'),
+            FSInputFile(CHAT_HISTORY.format(chat_id), f'history.jsonl.bak'),
             caption='Forward/send messages. Odd messages are from users, even are from model.\n\n'
             # TODO: mention admin
                     '<b>WARNING: Photos will be added to the context only if "image_recognition" is set to "yes".</b>',
