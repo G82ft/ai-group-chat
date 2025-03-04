@@ -23,7 +23,9 @@ add_ctxt_lock = Lock()
 
 @cmd.message(CommandStart())
 async def start(msg: Message):
+    print(msg.from_user.first_name, msg.text)
     settings_ = await settings.get(msg.chat.id)
+    print(settings_)
 
     msg = msg.reply_to_message or msg
 
