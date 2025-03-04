@@ -10,7 +10,8 @@ from google.genai.errors import APIError
 from google.genai.types import Part
 
 from commands import is_admin
-from data import create_chat, history, settings
+from data import history, settings
+from data.misc import create_chat
 from shared import chats
 from utils import format_input, ChatLockManager
 

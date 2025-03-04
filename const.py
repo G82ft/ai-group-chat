@@ -1,6 +1,6 @@
 CONFIG_PATH: str = 'config/config.yaml'
 CHATS_PATH: str = 'chats/'
-CHAT_PATH: str = f'{CHATS_PATH}chats/{{}}'
+CHAT_PATH: str = CHATS_PATH + '{}/'
 CHAT_HISTORY: str = f'{CHAT_PATH}history.jsonl'
 CHAT_SYS_INST: str = f'{CHAT_PATH}sys_inst.txt'
 CHAT_SETTINGS: str = f'{CHAT_PATH}settings.json'

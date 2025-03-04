@@ -50,9 +50,9 @@ async def set_setting(msg: Message):
 
     match key:
         case "enabled" | "override_sys":
-            success = await settings.set_setting(chat_id, key, value.lower() in TRUE_LITERALS)
+            success = await settings.set_setting(chat_id, key, value.lower() in TRUE_LITERALS, await is_admin(msg))
         case "api_key" | "image_recognition":
-            success = await settings.set_setting(chat_id, key, value)
+            success = await settings.set_setting(chat_id, key, value, await is_admin(msg))
         case _:
             success = False
 
@@ -70,8 +70,8 @@ async def get_settings_info(msg: Message):
 
     for setting, info in SETTINGS_INFO.items():
         result += (
-            f"\n'{setting}':\n"
-            f"Type: '{info["type"]}'\n"
+            f"\n{setting}:\n"
+            f"Type: <{info["type"].__name__}>\n"
         )
         if info["type"] == bool:
             result += (
@@ -82,18 +82,20 @@ async def get_settings_info(msg: Message):
         elif values_key not in info:
             continue
 
-        result += f"Available values: '{"', '".join(info[values_key])}'.\n'"
+        result += f"Available values: {", ".join(info[values_key])}.\n"
+
+    await msg.reply(result)
 
 
 @cmd.message(Command('add_chat_context'))
 async def add_chat_context(msg: Message):
     if text := await validate_cmd(msg, chat_arg=True, dm=True):
-        return await msg.reply(text)
+        return await msg.bot.send_message(msg.chat.id, text)
 
     await msg.reply_document(
         FSInputFile(config.get("chats_history"), f'{config.get("chats_history").split('/')[-1]}.bak'),
         caption='Forward/send messages. Odd messages are from users, even are from model.\n\n'
-                # TODO: mention admin
+        # TODO: mention admin
                 '<b>WARNING: Photos will be added to the context only if "image_recognition" is set to "yes".</b>',
         parse_mode=ParseMode.HTML
     )
@@ -157,6 +159,9 @@ async def reload_chat(msg: Message):
     if text := await validate_cmd(msg, chat_arg=True):
         return await msg.reply(text)
 
+    if msg.chat.id not in chats:
+        return await msg.reply(f'Chat {msg.chat.id} was not cached.')
+
     del chats[msg.chat.id]
     await msg.reply(
         f'Chat {msg.chat.id} and system instructions reloaded.\n'
@@ -177,8 +182,7 @@ async def reload_config(msg: Message):
 @cmd.message(Command('get_sys_inst'))
 async def get_sys_inst(msg: Message):
     if text := await validate_cmd(msg, chat_arg=True, dm=True):
-        await msg.reply(text)
-        return
+        return await msg.bot.send_message(msg.chat.id, text)
 
     chat_id: int = parse_args(msg, chat_arg=True)[1]
 
@@ -188,8 +192,7 @@ async def get_sys_inst(msg: Message):
 @cmd.message(Command('set_sys_inst'))
 async def set_sys_inst(msg: Message):
     if text := await validate_cmd(msg, chat_arg=True, dm=True):
-        await msg.reply(text)
-        return
+        return await msg.bot.send_message(msg.chat.id, text)
 
     if not msg.document:
         await msg.reply('You need to provide a file with system instructions.')

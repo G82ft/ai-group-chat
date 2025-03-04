@@ -38,10 +38,10 @@ async def get_safety_settings(chat_id: int) -> list[SafetySetting]:
     return result
 
 
-async def set_setting(chat_id: int, setting: str, value: any) -> bool:
+async def set_setting(chat_id: int, setting: str, value: any, is_admin: bool = False) -> bool:
     settings = await get(chat_id)
 
-    if not validate(setting, value, bool(settings["api_key"])):
+    if not validate(setting, value, is_admin):
         return False
 
     settings[setting] = value
@@ -62,8 +62,12 @@ def validate(setting: str, value: any, is_admin: bool) -> bool:
 
     validation = SETTINGS_VALIDATION[setting]
 
+    print(isinstance(value, SETTINGS_INFO[setting]["type"]))
+
     if not isinstance(value, SETTINGS_INFO[setting]["type"]):
         return False
+
+    print(is_admin)
 
     return is_admin and validation["admin_validate"](value) or validation["validate"](value)
 

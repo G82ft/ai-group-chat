@@ -1,5 +1,3 @@
-from asyncio import Lock
-
 # noinspection PyPackageRequirements
 from google.genai.chats import Chat
 
