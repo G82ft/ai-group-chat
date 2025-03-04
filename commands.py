@@ -91,16 +91,24 @@ async def add_chat_context(msg: Message):
         return await msg.bot.send_message(msg.chat.id, text)
 
     _, chat_id, _ = parse_args(msg, chat_arg=True)
+    chat_history_path = CHAT_HISTORY.format(chat_id)
+    caption: str = (
+        'Forward/send messages. Odd messages are from users, even are from model.\n\n'
+        # TODO: mention admin
+        '<b>WARNING: Photos will be added to the context only if "image_recognition" is set to "yes".</b>'
+    )
 
-    async with file_locks.get_lock(chat_id):
-        print(repr(CHAT_HISTORY.format(chat_id)))
-        await msg.reply_document(
-            FSInputFile(CHAT_HISTORY.format(chat_id), f'history.jsonl.bak'),
-            caption='Forward/send messages. Odd messages are from users, even are from model.\n\n'
-            # TODO: mention admin
-                    '<b>WARNING: Photos will be added to the context only if "image_recognition" is set to "yes".</b>',
-            parse_mode=ParseMode.HTML
-        )
+    async with file_locks.get_lock(msg.chat.id):
+        with open(chat_history_path, 'rb') as f:
+            contents = f.read(1)
+        if contents:
+            await msg.reply_document(
+                FSInputFile(chat_history_path, f'history.jsonl.bak'),
+                caption=caption,
+                parse_mode=ParseMode.HTML
+            )
+        else:
+            await msg.reply(caption)
 
     added_chat_context[msg.chat.id] = [
         chat_id, True, []
