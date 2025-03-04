@@ -17,7 +17,7 @@ from utils import format_input, ChatLockManager
 
 gen = Router(name='gen')
 
-reaction_filter = (F.reply_to_message & F.reply_to_message.from_user.id == 7584972194) | (F.chat.id == F.from_user.id)
+reaction_filter = (F.reply_to_message & F.reply_to_message.from_user.id == 7584972194)
 gen_locks: ChatLockManager = ChatLockManager()
 
 
