@@ -6,14 +6,14 @@ from google.genai.types import Content, Part
 
 from const import CHAT_HISTORY
 from data.misc import touch_file_structure
-from shared import locks
+from shared import file_locks
 
 
 async def get_chat_history(chat_id: int):
     await touch_file_structure(chat_id)
     history: list[Content] = []
 
-    async with locks.get_lock(chat_id):
+    async with file_locks.get_lock(chat_id):
         with open(CHAT_HISTORY.format(chat_id), encoding='utf-8') as f:
             for interaction in f.readlines():
                 interaction = json.loads(interaction)
@@ -35,6 +35,6 @@ async def get_chat_history(chat_id: int):
 
 
 async def write_chat_history(chat_id: int, data: list[list[str]]):
-    async with locks.get_lock(chat_id):
+    async with file_locks.get_lock(chat_id):
         with open(CHAT_HISTORY.format(chat_id), 'a', encoding='utf-8') as f:
             print(json.dumps(data, ensure_ascii=False), flush=True, file=f)

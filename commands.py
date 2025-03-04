@@ -11,7 +11,7 @@ from aiogram.utils.chat_member import ADMINS
 import config
 from const import SETTINGS_INFO, TRUE_LITERALS, CHAT_SYS_INST
 from data import history, settings
-from shared import chats, config as conf, locks
+from shared import chats, config as conf, file_locks
 from utils import format_input
 
 cmd = Router(name='cmd')
@@ -30,7 +30,7 @@ async def start(msg: Message):
     await msg.bot.send_message(
         msg.chat.id,
         f'User ID: {msg.from_user.id}\n'
-        f'Is admin: {is_admin(msg)}\n'
+        f'Is admin: {await is_admin(msg)}\n'
         f'Chat ID: {msg.chat.id}\n'
         f'Chat enabled: {settings_["enabled"]}\n'
         f'Image recognition: {settings_["image_recognition"]}\n'
@@ -40,20 +40,22 @@ async def start(msg: Message):
 
 @cmd.message(Command('set_setting'))
 async def set_setting(msg: Message):
-    if not await is_admin(msg):
-        await msg.reply(f'You are not an admin.', show_alert=True)
+    if text := await validate_cmd(msg, chat_arg=True, args_len=2):
+        return await msg.reply(text)
 
-    chat_id, key, value = msg.text.removeprefix('/set_setting').split()
+    _, chat_id, args = parse_args(msg, chat_arg=True)
+    key, value = args
 
     match key:
         case "enabled" | "override_sys":
-            success = await settings.set_setting(int(chat_id), key, value.lower() in TRUE_LITERALS)
+            success = await settings.set_setting(chat_id, key, value.lower() in TRUE_LITERALS)
         case "api_key" | "image_recognition":
-            success = await settings.set_setting(int(chat_id), key, value)
+            success = await settings.set_setting(chat_id, key, value)
         case _:
             success = False
 
-    await msg.reply(
+    await msg.bot.send_message(
+        msg.chat.id,
         success and f"Setting '{key}' updated successfully." or f"Invalid value provided for '{key}'.",
     )
     await msg.delete()
@@ -83,25 +85,14 @@ async def get_settings_info(msg: Message):
 
 @cmd.message(Command('add_chat_context'))
 async def add_chat_context(msg: Message):
-    if not await is_admin(msg):
-        return
-
-    if msg.from_user.id != msg.chat.id:
-        await msg.reply('You must use this command in DM with the bot.')
-        return
-
-    if msg.chat.id in added_chat_context:
-        await stop_context(msg)
-        return
-
-    if len(msg.text.split()) < 2:
-        await msg.reply('You need to specify chat ID as an argument.')
-        return
+    if text := await validate_cmd(msg, chat_arg=True, dm=True):
+        return await msg.reply(text)
 
     await msg.reply_document(
         FSInputFile(config.get("chats_history"), f'{config.get("chats_history").split('/')[-1]}.bak'),
-        caption='Forward/send messages. Odd messages are from users, even are from the model.\n\n'
-                '<b>WARNING: All users are considered admins and all photos will be added to the context!</b>',
+        caption='Forward/send messages. Odd messages are from users, even are from model.\n\n'
+                # TODO: mention admin
+                '<b>WARNING: Photos will be added to the context only if "image_recognition" is set to "yes".</b>',
         parse_mode=ParseMode.HTML
     )
 
@@ -123,7 +114,7 @@ async def handle_add_chat_context(msg: Message):
     if added_chat_context[msg.chat.id][1]:
         contents = [format_input(msg.text or msg.caption or '<empty>', user, True)]
 
-        if msg.photo:
+        if msg.photo and (await settings.get(added_chat_context[msg.chat.id][0]))["image_recognition"] == "yes":
             image_file = io.BytesIO()
             await msg.bot.download_file((await msg.bot.get_file(msg.photo[0].file_id)).file_path, image_file)
             contents.append(b64encode(image_file.getvalue()).decode('ascii'))
@@ -139,70 +130,11 @@ async def handle_add_chat_context(msg: Message):
     add_ctxt_lock.release()
 
 
-@cmd.message(Command('reload_chat'))
-async def reload_chat(msg: Message):
-    if not await is_admin(msg):
-        return
+@cmd.message(Command('stop_add_context'))
+async def stop_add_context(msg: Message):
+    if msg.chat.id not in added_chat_context:
+        return await msg.reply('You have not started adding context yet.')
 
-    del chats[msg.chat.id]
-    await msg.reply(
-        f'Chat {msg.chat.id} and system instructions reloaded.\n'
-    )
-
-
-@cmd.message(Command('reload_config'))
-async def reload_config(msg: Message):
-    if not await is_admin(msg):
-        return
-
-    conf.clear()
-    await msg.reply(
-        f'Config reloaded.\n'
-    )
-
-
-@cmd.message(Command('get_sys_inst'))
-async def get_sys_inst(msg: Message):
-    if (text := await validate_cmd(msg)) is not None:
-        if text:
-            # noinspection PyTypeChecker
-            await msg.reply(text)
-        return
-
-    chat = msg.text.split()[1]
-
-    await msg.reply_document(FSInputFile(CHAT_SYS_INST.format(chat)))
-
-
-@cmd.message(Command('set_sys_inst'))
-async def set_sys_inst(msg: Message):
-    if (text := await validate_cmd(msg)) is not None:
-        if text:
-            # noinspection PyTypeChecker
-            await msg.reply(text)
-        return
-
-    chat = msg.caption.split()[1]
-
-    if not msg.document:
-        await msg.reply('You need to provide a file with system instructions.')
-
-    chat_sys_inst_path: str = CHAT_SYS_INST.format(chat)
-
-    async with locks.get_lock(msg.chat.id):
-        await msg.reply_document(
-            FSInputFile(chat_sys_inst_path, f'{chat_sys_inst_path}.bak'),
-            caption='System instructions backup. Writing new instructions...',
-        )
-
-    async with locks.get_lock(msg.chat.id):
-        with open(chat_sys_inst_path, 'wb') as f:
-            await msg.bot.download_file((await msg.bot.get_file(msg.document.file_id)).file_path, f)
-
-    await msg.reply(f'System instructions changed for {chat}.')
-
-
-async def stop_context(msg: Message):
     context = added_chat_context[msg.chat.id][-1]
     bot_msg: Message = await msg.reply('Finished receiving messages. Adding context...')
 
@@ -218,22 +150,97 @@ async def stop_context(msg: Message):
     del added_chat_context[msg.chat.id]
 
 
-async def validate_cmd(msg: Message) -> str | None:
-    text = msg.text or msg.caption
-    if not await is_admin(msg):
-        return ''
+@cmd.message(Command('reload_chat'))
+async def reload_chat(msg: Message):
+    if text := await validate_cmd(msg, chat_arg=True):
+        return await msg.reply(text)
 
-    if msg.from_user.id != msg.chat.id:
+    del chats[msg.chat.id]
+    await msg.reply(
+        f'Chat {msg.chat.id} and system instructions reloaded.\n'
+    )
+
+
+@cmd.message(Command('reload_config'))
+async def reload_config(msg: Message):
+    if text := await validate_cmd(msg, chat_arg=True):
+        return await msg.reply(text)
+
+    conf.clear()
+    await msg.reply(
+        f'Config reloaded.\n'
+    )
+
+
+@cmd.message(Command('get_sys_inst'))
+async def get_sys_inst(msg: Message):
+    if text := await validate_cmd(msg, chat_arg=True, dm=True):
+        await msg.reply(text)
+        return
+
+    chat_id: int = parse_args(msg, chat_arg=True)[1]
+
+    await msg.reply_document(FSInputFile(CHAT_SYS_INST.format(chat_id)))
+
+
+@cmd.message(Command('set_sys_inst'))
+async def set_sys_inst(msg: Message):
+    if text := await validate_cmd(msg, chat_arg=True, dm=True):
+        await msg.reply(text)
+        return
+
+    if not msg.document:
+        await msg.reply('You need to provide a file with system instructions.')
+
+    chat = msg.caption.split()[1]
+    chat_sys_inst_path: str = CHAT_SYS_INST.format(chat)
+
+    async with file_locks.get_lock(msg.chat.id):
+        await msg.reply_document(
+            FSInputFile(chat_sys_inst_path, f'{chat_sys_inst_path}.bak'),
+            caption='System instructions backup. Writing new instructions...',
+        )
+
+    async with file_locks.get_lock(msg.chat.id):
+        with open(chat_sys_inst_path, 'wb') as f:
+            await msg.bot.download_file((await msg.bot.get_file(msg.document.file_id)).file_path, f)
+
+    await msg.reply(f'System instructions changed for {chat}.')
+
+
+def parse_args(msg: Message, chat_arg: bool = False) -> tuple[str, int, list[str]]:
+    text = msg.text or msg.caption
+    args = text.split()
+    command = args.pop(0)
+
+    chat_id: int = msg.chat.id
+    if chat_arg and args and msg.from_user.id == chat_id:
+        chat_id = int(args.pop(0))
+
+    return command, chat_id, args
+
+
+async def validate_cmd(msg: Message, *, chat_arg: bool = False, args_len: int = 0, dm: bool = False) -> str | None:
+    command, chat_id, args = parse_args(msg, chat_arg)
+
+    if len(args) < args_len:
+        return f'{command} requires {args_len} arguments.'
+
+    if not await is_admin(msg, chat_id):
+        return 'You are not an admin of this chat.'
+
+    if dm and msg.from_user.id != msg.chat.id:
+        await msg.delete()
         return 'You must use this command in DM with the bot.'
 
-    if len(text.split()) < 2:
-        return 'You need to specify chat ID as an argument.'
 
+async def is_admin(msg: Message, chat_id: int = None) -> bool:
+    if chat_id is None:
+        chat_id = msg.chat.id
 
-async def is_admin(msg: Message) -> bool:
     if msg.from_user.id in config.get("admins"):
         return True
 
     return (
-            isinstance(await msg.bot.get_chat_member(msg.chat.id, msg.from_user.id), ADMINS)
-            and (await settings.get(msg.chat.id))["api_key"])
+            isinstance(await msg.bot.get_chat_member(chat_id, msg.from_user.id), ADMINS)
+            and (await settings.get(chat_id))["api_key"])

@@ -6,7 +6,7 @@ from google.genai.types import SafetySetting, HarmCategory, HarmBlockThreshold
 
 import config
 from const import CHAT_SETTINGS, SETTINGS_VALIDATION, DEFAULT_SETTINGS, CHAT_PATH, SETTINGS_INFO
-from shared import locks
+from shared import file_locks
 
 
 async def get(chat_id: int) -> dict:
@@ -17,7 +17,7 @@ async def get(chat_id: int) -> dict:
         settings = await create_default_settings(chat_id)
 
     if not settings:
-        async with locks.get_lock(chat_id):
+        async with file_locks.get_lock(chat_id):
             with open(chat_settings, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
 
@@ -46,7 +46,7 @@ async def set_setting(chat_id: int, setting: str, value: any) -> bool:
 
     settings[setting] = value
 
-    async with locks.get_lock(chat_id):
+    async with file_locks.get_lock(chat_id):
         with open(CHAT_SETTINGS.format(chat_id), 'w', encoding='utf-8') as f:
             # noinspection PyTypeChecker
             json.dump(settings, f, ensure_ascii=False, indent=4)
@@ -69,7 +69,7 @@ def validate(setting: str, value: any, is_admin: bool) -> bool:
 
 
 async def create_default_settings(chat_id: int) -> dict:
-    async with locks.get_lock(chat_id):
+    async with file_locks.get_lock(chat_id):
         os.makedirs(CHAT_PATH.format(chat_id), exist_ok=True)
 
         with open(CHAT_SETTINGS.format(chat_id), 'w', encoding='utf-8') as f:

@@ -12,11 +12,12 @@ from google.genai.types import Part
 from commands import is_admin
 from data import create_chat, history, settings
 from shared import chats
-from utils import format_input
+from utils import format_input, ChatLockManager
 
 gen = Router(name='gen')
 
 reaction_filter = (F.reply_to_message & F.reply_to_message.from_user.id == 7584972194) | (F.chat.id == F.from_user.id)
+gen_locks: ChatLockManager = ChatLockManager()
 
 
 @gen.message(reaction_filter & (~F.photo))
@@ -96,7 +97,8 @@ async def generate_response(msg: Message, photo: bool = False):
 
     await msg.bot.send_chat_action(msg.chat.id, 'typing')
     try:
-        result = chats[msg.chat.id].send_message(contents)
+        async with gen_locks.get_lock(msg.chat.id):
+            result = chats[msg.chat.id].send_message(contents)
     except APIError as ce:
         response: str = f'Unexpected error: {ce.code} {ce.status}.\n'
         match ce.code:
