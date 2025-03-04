@@ -8,10 +8,13 @@ def format_input(text: str, user_name: str, is_admin: bool):
     if admin is None or not is_admin:
         admin = ''
     else:
-        admin = admin.group(0)
+        admin = admin.group(0).removeprefix('<a>').removesuffix('</a>')
     user = sub(r'<a>[\s\S]+</a>', '', text)
 
-    return f'{admin}\n' + (f'<u name="{user_name}">\n{user}\n</u>' if user else '')
+    return (
+            f'<message user_role="admin" name="Admin">\n{admin}\n</message>\n'
+            + (f'<message user_role="interlocutor" name="{user_name}">\n{user}\n</message>' if user else '')
+    )
 
 
 class ChatLockManager:
