@@ -194,7 +194,7 @@ async def set_sys_inst(msg: Message):
         return await msg.bot.send_message(msg.chat.id, text)
 
     if not msg.document:
-        await msg.reply('You need to provide a file with system instructions.')
+        return await msg.reply('You need to provide a file with system instructions.')
 
     chat = msg.caption.split()[1]
     chat_sys_inst_path: str = CHAT_SYS_INST.format(chat)
