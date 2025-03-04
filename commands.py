@@ -1,6 +1,8 @@
 import io
+import json
 from asyncio import Lock
 from base64 import b64encode
+from json import JSONDecodeError
 
 from aiogram import Router
 from aiogram.enums import ParseMode
@@ -51,6 +53,11 @@ async def set_setting(msg: Message):
             success = await settings.set_setting(chat_id, key, value.lower() in TRUE_LITERALS, await is_admin(msg))
         case "api_key" | "image_recognition":
             success = await settings.set_setting(chat_id, key, value, await is_admin(msg))
+        case "safety":
+            try:
+                success = await settings.set_setting(chat_id, key, json.loads(value), await is_admin(msg))
+            except JSONDecodeError:
+                success = False
         case _:
             success = False
 
