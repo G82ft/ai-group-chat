@@ -62,12 +62,8 @@ def validate(setting: str, value: any, is_admin: bool) -> bool:
 
     validation = SETTINGS_VALIDATION[setting]
 
-    print(isinstance(value, SETTINGS_INFO[setting]["type"]))
-
     if not isinstance(value, SETTINGS_INFO[setting]["type"]):
         return False
-
-    print(is_admin)
 
     return is_admin and validation["admin_validate"](value) or validation["validate"](value)
 

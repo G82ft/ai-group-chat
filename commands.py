@@ -23,9 +23,7 @@ add_ctxt_lock = Lock()
 
 @cmd.message(CommandStart())
 async def start(msg: Message):
-    print(msg.from_user.first_name, msg.text)
     settings_ = await settings.get(msg.chat.id)
-    print(settings_)
 
     msg = msg.reply_to_message or msg
 
@@ -191,6 +189,7 @@ async def get_sys_inst(msg: Message):
 
 @cmd.message(Command('set_sys_inst'))
 async def set_sys_inst(msg: Message):
+    print('got the msg')
     if text := await validate_cmd(msg, chat_arg=True, dm=True):
         return await msg.bot.send_message(msg.chat.id, text)
 
@@ -199,6 +198,8 @@ async def set_sys_inst(msg: Message):
 
     chat = msg.caption.split()[1]
     chat_sys_inst_path: str = CHAT_SYS_INST.format(chat)
+
+    print('got the inst')
 
     async with file_locks.get_lock(msg.chat.id):
         await msg.reply_document(
