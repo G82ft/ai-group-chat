@@ -11,6 +11,29 @@ If you reply to a bot's message, the bot will respond back.
 
 Docker.
 
+## Configuring
+
+There is an example of config [here](/config/config.example.yaml).
+
+```yaml
+tg_token: XXXXX
+base_genai_token: XXXXX
+genai_model: gemini-2.0-flash
+base_sys_inst: config/sys_inst.txt
+admins:
+  - 1
+  - 2
+```
+
+|       Field        | Explanation                                                                       |
+|:------------------:|-----------------------------------------------------------------------------------|
+|     `tg_token`     | [Telegram bot API token](https://core.telegram.org/bots/api#authorizing-your-bot) |
+| `base_genai_token` | [Gemini API key](https://aistudio.google.com/app/apikey)                          |
+|   `genai_model`    | [Gemini model variant](https://ai.google.dev/gemini-api/docs/models/gemini)       |
+|  `base_sys_inst`   | Base system instructions.                                                         |
+|      `admins`      | List of admins' user IDs.                                                         |
+
+
 ## Running
 
 ```shell
