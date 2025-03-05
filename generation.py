@@ -120,6 +120,7 @@ async def generate_response(msg: Message, photo: bool = False):
         return response
 
     if result.text is None:
+        print(result)
         response = 'Rephrase your message and try again.\n'
         if result.prompt_feedback is not None:
             response += f'Block reason: {result.prompt_feedback.block_reason.value}'
