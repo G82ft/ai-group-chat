@@ -16,6 +16,7 @@ from shared import file_locks
 async def create_chat(chat_id: int) -> Chat:
     await touch_file_structure(chat_id)
     client = Client(api_key=await settings.get_api_key(chat_id))
+    print(await settings.get_safety_settings(chat_id))
 
     return client.chats.create(
         model=config.get("genai_model"),

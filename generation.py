@@ -27,12 +27,14 @@ async def handle_text(msg: Message):
         return
 
     await msg.react([ReactionTypeEmoji(emoji='👀')])
-
     await msg.reply(await generate_response(msg))
 
 
 @gen.message(reaction_filter & F.photo)
 async def handle_photo(msg: Message):
+    if not (await settings.get(msg.chat.id))["enabled"]:
+        return
+
     match (await settings.get(msg.chat.id))["image_recognition"]:
         case 'ignore':
             return
