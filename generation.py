@@ -87,7 +87,7 @@ async def generate_response(msg: Message, photo: bool = False):
 
     text = msg.text or msg.caption or '<empty>'
 
-    request = format_input(text, msg.from_user.first_name, await is_admin(msg))
+    request = format_input(text, msg.from_user.first_name if msg.chat.id != msg.from_user.id else '', await is_admin(msg))
 
     if not request:
         return 'Your message is empty.'
